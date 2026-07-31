@@ -1,383 +1,67 @@
 (() => {
   "use strict";
 
-  const STORAGE_KEY = "sdgRecordV1.records";
-  const PREF_KEY = "sdgRecordV1.preferences";
-
-  const $ = (id) => document.getElementById(id);
-
-  const el = {
-    measurementDate: $("measurementDate"),
-    point: $("point"),
-    lane: $("lane"),
-    density: $("density"),
-    photoInput: $("photoInput"),
-    preview: $("preview"),
-    ocrButton: $("ocrButton"),
-    ocrStatus: $("ocrStatus"),
-    saveButton: $("saveButton"),
-    cancelEditButton: $("cancelEditButton"),
-    message: $("message"),
-    recordList: $("recordList"),
-    emptyState: $("emptyState"),
-    recordCount: $("recordCount"),
-    showTodayButton: $("showTodayButton"),
-    showAllButton: $("showAllButton"),
-    exportButton: $("exportButton"),
-    backupButton: $("backupButton"),
-    restoreInput: $("restoreInput"),
-    deleteAllButton: $("deleteAllButton")
-  };
-
-  let records = loadRecords();
-  let editingId = null;
+  const STORAGE_KEY = "sdgRecords";
+  const LEGACY_KEYS = ["sdg-records", "sdg_record_records"];
   let currentFilter = "today";
-  let selectedImage = null;
+  let records = loadRecords();
 
-  init();
+  const form = document.getElementById("recordForm");
+  const editIdInput = document.getElementById("editId");
+  const dateInput = document.getElementById("date");
+  const pointSelect = document.getElementById("point");
+  const densityInput = document.getElementById("density");
+  const saveButton = document.getElementById("saveButton");
+  const cancelEditButton = document.getElementById("cancelEditButton");
+  const recordList = document.getElementById("recordList");
+  const emptyMessage = document.getElementById("emptyMessage");
+  const showTodayButton = document.getElementById("showTodayButton");
+  const showAllButton = document.getElementById("showAllButton");
+  const shareCsvButton = document.getElementById("shareCsvButton");
+  const deleteAllButton = document.getElementById("deleteAllButton");
+  const toast = document.getElementById("toast");
 
-  function init() {
-    populatePoints();
-    const prefs = loadPreferences();
-    el.measurementDate.value = todayLocal();
-    el.point.value = prefs.point || "No.20";
-    el.lane.value = prefs.lane || "左";
-    bindEvents();
-    render();
+  initialize();
+
+  function initialize() {
+    buildPointOptions();
+    dateInput.value = todayLocal();
+    renderRecords();
     registerServiceWorker();
   }
 
-  function bindEvents() {
-    el.photoInput.addEventListener("change", handlePhoto);
-    el.ocrButton.addEventListener("click", runOcr);
-    el.saveButton.addEventListener("click", saveRecord);
-    el.cancelEditButton.addEventListener("click", cancelEdit);
-    el.showTodayButton.addEventListener("click", () => setFilter("today"));
-    el.showAllButton.addEventListener("click", () => setFilter("all"));
-    el.exportButton.addEventListener("click", exportCsv);
-    el.backupButton.addEventListener("click", exportBackup);
-    el.restoreInput.addEventListener("change", restoreBackup);
-    el.deleteAllButton.addEventListener("click", deleteAll);
-  }
-
-  function populatePoints() {
+  function buildPointOptions() {
     const fragment = document.createDocumentFragment();
-    for (let i = 20; i <= 110; i += 1) {
+    for (let number = 20; number <= 110; number += 1) {
       const option = document.createElement("option");
-      option.value = `No.${i}`;
-      option.textContent = `No.${i}`;
+      option.value = `No.${number}`;
+      option.textContent = `No.${number}`;
       fragment.appendChild(option);
     }
-    el.point.appendChild(fragment);
-  }
-
-  function handlePhoto(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    selectedImage = file;
-    el.preview.src = URL.createObjectURL(file);
-    el.preview.hidden = false;
-    el.ocrButton.disabled = false;
-    el.ocrStatus.textContent = "画像を確認して「読み取る」を押してください。";
-  }
-
-  async function runOcr() {
-    if (!selectedImage) return;
-    if (!window.Tesseract) {
-      showMessage("OCR機能を読み込めません。通信状態を確認してください。", "error");
-      return;
-    }
-
-    el.ocrButton.disabled = true;
-    el.ocrStatus.textContent = "読み取り中…初回は少し時間がかかります。";
-
-    try {
-      const result = await Tesseract.recognize(selectedImage, "eng", {
-        logger: (m) => {
-          if (m.status === "recognizing text") {
-            el.ocrStatus.textContent = `読み取り中… ${Math.round((m.progress || 0) * 100)}%`;
-          }
-        }
-      });
-
-      const text = result.data.text || "";
-      const value = extractDensity(text);
-
-      if (value !== null) {
-        el.density.value = value.toFixed(1);
-        el.ocrStatus.textContent = `読取候補：${value.toFixed(1)} kg/m³。必ず画面と照合してください。`;
-        el.density.focus();
-      } else {
-        el.ocrStatus.textContent = "乾燥密度を特定できませんでした。数値を直接入力してください。";
-      }
-    } catch (error) {
-      console.error(error);
-      el.ocrStatus.textContent = "読み取りに失敗しました。数値を直接入力してください。";
-    } finally {
-      el.ocrButton.disabled = false;
-    }
-  }
-
-  function extractDensity(text) {
-    const normalized = text.replace(/,/g, "").replace(/[Oo]/g, "0");
-    const matches = normalized.match(/\b[12]\d{3}(?:\.\d)?\b/g) || [];
-    const numbers = matches
-      .map(Number)
-      .filter((n) => n >= 1000 && n <= 3000);
-
-    if (!numbers.length) return null;
-
-    // SDGの乾燥密度として現実的な候補を優先
-    const preferred = numbers.find((n) => n >= 1400 && n <= 2600);
-    return preferred ?? numbers[0];
-  }
-
-  function saveRecord() {
-    clearMessage();
-
-    const date = el.measurementDate.value;
-    const point = el.point.value;
-    const lane = el.lane.value;
-    const density = Number(el.density.value);
-
-    if (!date) return showMessage("測定日を入力してください。", "error");
-    if (!point) return showMessage("測点を選択してください。", "error");
-    if (!["左", "右"].includes(lane)) return showMessage("車線を選択してください。", "error");
-    if (!Number.isFinite(density) || density < 1000 || density > 3000) {
-      return showMessage("乾燥密度を1000～3000の範囲で入力してください。", "error");
-    }
-
-    const duplicate = records.find((r) =>
-      r.id !== editingId &&
-      r.date === date &&
-      r.point === point &&
-      r.lane === lane
-    );
-
-    if (duplicate) {
-      const proceed = confirm(`${date} ${point} ${lane}は既に登録されています。\n重複して登録しますか？`);
-      if (!proceed) return;
-    }
-
-    const now = new Date().toISOString();
-
-    if (editingId) {
-      records = records.map((r) => r.id === editingId
-        ? { ...r, date, point, lane, density: round1(density), updatedAt: now }
-        : r
-      );
-      showMessage("記録を修正しました。", "success");
-    } else {
-      records.push({
-        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-        date,
-        point,
-        lane,
-        density: round1(density),
-        createdAt: now,
-        updatedAt: now
-      });
-      showMessage("登録しました。", "success");
-    }
-
-    saveRecords();
-    savePreferences({ point, lane });
-    resetEntryAfterSave();
-    render();
-  }
-
-  function editRecord(id) {
-    const record = records.find((r) => r.id === id);
-    if (!record) return;
-
-    editingId = id;
-    el.measurementDate.value = record.date;
-    el.point.value = record.point;
-    el.lane.value = record.lane;
-    el.density.value = record.density.toFixed(1);
-    el.saveButton.textContent = "修正を保存";
-    el.cancelEditButton.hidden = false;
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function cancelEdit() {
-    editingId = null;
-    el.saveButton.textContent = "登録";
-    el.cancelEditButton.hidden = true;
-    el.measurementDate.value = todayLocal();
-    el.density.value = "";
-    clearMessage();
-  }
-
-  function deleteRecord(id) {
-    const record = records.find((r) => r.id === id);
-    if (!record) return;
-    const ok = confirm(`${record.date} ${record.point} ${record.lane} ${record.density.toFixed(1)} を削除しますか？`);
-    if (!ok) return;
-    records = records.filter((r) => r.id !== id);
-    saveRecords();
-    if (editingId === id) cancelEdit();
-    render();
-  }
-
-  function setFilter(filter) {
-    currentFilter = filter;
-    el.showTodayButton.classList.toggle("active", filter === "today");
-    el.showAllButton.classList.toggle("active", filter === "all");
-    render();
-  }
-
-  function render() {
-    const source = [...records].sort(sortRecords);
-    const visible = currentFilter === "today"
-      ? source.filter((r) => r.date === todayLocal())
-      : source;
-
-    el.recordList.innerHTML = "";
-    el.emptyState.hidden = visible.length > 0;
-    el.recordCount.textContent = `${visible.length}件`;
-
-    visible.forEach((record) => {
-      const item = document.createElement("article");
-      item.className = "record-item";
-      item.innerHTML = `
-        <div class="record-main">
-          <span>${escapeHtml(record.date.replaceAll("-", "/"))}</span>
-          <strong>${escapeHtml(record.point)}</strong>
-          <strong>${escapeHtml(record.lane)}</strong>
-          <span class="density-value">${record.density.toFixed(1)}</span>
-        </div>
-        <div class="record-actions">
-          <button class="edit-button" type="button">修正</button>
-          <button class="delete-button" type="button">削除</button>
-        </div>
-      `;
-      item.querySelector(".edit-button").addEventListener("click", () => editRecord(record.id));
-      item.querySelector(".delete-button").addEventListener("click", () => deleteRecord(record.id));
-      el.recordList.appendChild(item);
-    });
-  }
-
-  function sortRecords(a, b) {
-    return a.date.localeCompare(b.date)
-      || pointNumber(a.point) - pointNumber(b.point)
-      || a.lane.localeCompare(b.lane, "ja");
-  }
-
-  function exportCsv() {
-    if (!records.length) {
-      showMessage("出力する記録がありません。", "error");
-      return;
-    }
-
-    const sorted = [...records].sort(sortRecords);
-    const rows = [
-      ["測定日", "測点", "車線", "乾燥密度_kgm3"],
-      ...sorted.map((r) => [r.date.replaceAll("-", "/"), r.point, r.lane, r.density.toFixed(1)])
-    ];
-
-    const csv = "\uFEFF" + rows.map((row) =>
-      row.map(csvEscape).join(",")
-    ).join("\r\n");
-
-    const dates = sorted.map((r) => r.date).sort();
-    const start = dates[0].replaceAll("-", "");
-    const end = dates[dates.length - 1].replaceAll("-", "");
-    downloadBlob(csv, `SDG記録_${start}-${end}.csv`, "text/csv;charset=utf-8");
-    showMessage("CSVを作成しました。共有からOneDriveへ保存してください。", "success");
-  }
-
-  function exportBackup() {
-    if (!records.length) {
-      showMessage("保存する記録がありません。", "error");
-      return;
-    }
-
-    const payload = {
-      app: "SDG Record",
-      version: "1.0",
-      exportedAt: new Date().toISOString(),
-      records
-    };
-
-    downloadBlob(
-      JSON.stringify(payload, null, 2),
-      `SDG_Record_Backup_${todayLocal().replaceAll("-", "")}.json`,
-      "application/json"
-    );
-    showMessage("バックアップを作成しました。", "success");
-  }
-
-  async function restoreBackup(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const payload = JSON.parse(await file.text());
-      if (!Array.isArray(payload.records)) throw new Error("invalid");
-      const valid = payload.records.filter(validateRecord);
-      const ok = confirm(`${valid.length}件のバックアップを読み込みます。\n現在のデータへ追加しますか？`);
-      if (!ok) return;
-
-      const existingIds = new Set(records.map((r) => r.id));
-      const additions = valid.filter((r) => !existingIds.has(r.id));
-      records = [...records, ...additions];
-      saveRecords();
-      render();
-      showMessage(`${additions.length}件を追加しました。`, "success");
-    } catch (error) {
-      showMessage("バックアップファイルを読み込めませんでした。", "error");
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  function deleteAll() {
-    if (!records.length) return;
-    const first = confirm("端末内のSDG記録をすべて削除しますか？");
-    if (!first) return;
-    const second = confirm("CSVまたはバックアップの保存を確認しましたか？\n削除後は元に戻せません。");
-    if (!second) return;
-
-    records = [];
-    saveRecords();
-    cancelEdit();
-    render();
-    showMessage("全データを削除しました。", "success");
-  }
-
-  function resetEntryAfterSave() {
-    editingId = null;
-    el.saveButton.textContent = "登録";
-    el.cancelEditButton.hidden = true;
-    el.density.value = "";
-    selectedImage = null;
-    el.photoInput.value = "";
-    el.preview.hidden = true;
-    el.preview.removeAttribute("src");
-    el.ocrButton.disabled = true;
-    el.ocrStatus.textContent = "画像は保存されません。";
-
-    // 同じ測点の左右を続けて測る想定で、自動で左右を切替
-    el.lane.value = el.lane.value === "左" ? "右" : "左";
-  }
-
-  function validateRecord(r) {
-    return r && typeof r.id === "string"
-      && /^\d{4}-\d{2}-\d{2}$/.test(r.date)
-      && /^No\.(?:[2-9]\d|10\d|110)$/.test(r.point)
-      && ["左", "右"].includes(r.lane)
-      && Number.isFinite(Number(r.density));
+    pointSelect.appendChild(fragment);
   }
 
   function loadRecords() {
+    let raw = localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) {
+      for (const key of LEGACY_KEYS) {
+        const legacy = localStorage.getItem(key);
+        if (legacy) {
+          raw = legacy;
+          localStorage.setItem(STORAGE_KEY, legacy);
+          break;
+        }
+      }
+    }
+
+    if (!raw) return [];
+
     try {
-      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      return Array.isArray(parsed) ? parsed.filter(validateRecord).map((r) => ({
-        ...r,
-        density: Number(r.density)
-      })) : [];
-    } catch {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error("保存データの読込みに失敗しました。", error);
       return [];
     }
   }
@@ -386,71 +70,329 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   }
 
-  function loadPreferences() {
-    try {
-      return JSON.parse(localStorage.getItem(PREF_KEY) || "{}");
-    } catch {
-      return {};
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const date = dateInput.value;
+    const point = pointSelect.value;
+    const lane = document.querySelector('input[name="lane"]:checked')?.value;
+    const density = Number(densityInput.value);
+
+    if (!date || !point || !lane || !Number.isFinite(density) || density <= 0) {
+      alert("測定日、測点、車線、乾燥密度を確認してください。");
+      return;
+    }
+
+    const editId = editIdInput.value;
+
+    if (editId) {
+      const target = records.find((record) => record.id === editId);
+      if (!target) {
+        alert("編集対象の記録が見つかりません。");
+        resetForm();
+        return;
+      }
+
+      target.date = date;
+      target.point = point;
+      target.lane = lane;
+      target.density = density;
+      target.updatedAt = new Date().toISOString();
+      showToast("記録を修正しました。");
+    } else {
+      records.push({
+        id: createId(),
+        date,
+        point,
+        lane,
+        density,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      showToast("記録を登録しました。");
+    }
+
+    saveRecords();
+    resetForm();
+    renderRecords();
+  });
+
+  cancelEditButton.addEventListener("click", resetForm);
+
+  showTodayButton.addEventListener("click", () => {
+    currentFilter = "today";
+    updateFilterButtons();
+    renderRecords();
+  });
+
+  showAllButton.addEventListener("click", () => {
+    currentFilter = "all";
+    updateFilterButtons();
+    renderRecords();
+  });
+
+  shareCsvButton.addEventListener("click", shareCsv);
+
+  deleteAllButton.addEventListener("click", () => {
+    if (records.length === 0) {
+      alert("削除する測定データはありません。");
+      return;
+    }
+
+    const firstConfirm = confirm(
+      "保存されている全ての測定データを削除します。\n削除して良いですか？"
+    );
+    if (!firstConfirm) return;
+
+    const secondConfirm = confirm(
+      "本当に削除しますか？\nこの操作は元に戻せません。"
+    );
+    if (!secondConfirm) return;
+
+    records = [];
+    saveRecords();
+    resetForm();
+    renderRecords();
+    alert("全ての測定データを削除しました。");
+  });
+
+  function renderRecords() {
+    const today = todayLocal();
+    const visible = records
+      .filter((record) => currentFilter === "all" || record.date === today)
+      .sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+      });
+
+    recordList.replaceChildren();
+    emptyMessage.classList.toggle("hidden", visible.length > 0);
+
+    for (const record of visible) {
+      const item = document.createElement("article");
+      item.className = "record-item";
+
+      const main = document.createElement("div");
+      main.className = "record-main";
+
+      const textWrap = document.createElement("div");
+
+      const title = document.createElement("h3");
+      title.className = "record-title";
+      title.textContent = `${record.point}　${record.lane}`;
+
+      const meta = document.createElement("p");
+      meta.className = "record-meta";
+      meta.textContent = formatJapaneseDate(record.date);
+
+      const density = document.createElement("div");
+      density.className = "record-density";
+      density.textContent = `${formatDensity(record.density)} kg/m³`;
+
+      textWrap.append(title, meta);
+      main.append(textWrap, density);
+
+      const actions = document.createElement("div");
+      actions.className = "record-actions";
+
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "edit-button";
+      editButton.textContent = "修正";
+      editButton.addEventListener("click", () => startEdit(record.id));
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "delete-button";
+      deleteButton.textContent = "削除";
+      deleteButton.addEventListener("click", () => deleteRecord(record.id));
+
+      actions.append(editButton, deleteButton);
+      item.append(main, actions);
+      recordList.appendChild(item);
     }
   }
 
-  function savePreferences(prefs) {
-    localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
+  function startEdit(id) {
+    const record = records.find((item) => item.id === id);
+    if (!record) return;
+
+    editIdInput.value = record.id;
+    dateInput.value = record.date;
+    pointSelect.value = record.point;
+    densityInput.value = record.density;
+
+    const laneInput = document.querySelector(
+      `input[name="lane"][value="${CSS.escape(record.lane)}"]`
+    );
+    if (laneInput) laneInput.checked = true;
+
+    saveButton.textContent = "修正を保存する";
+    cancelEditButton.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    densityInput.focus();
   }
 
-  function todayLocal() {
-    const now = new Date();
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 10);
+  function deleteRecord(id) {
+    const record = records.find((item) => item.id === id);
+    if (!record) return;
+
+    const ok = confirm(
+      `${record.date}　${record.point}　${record.lane}\n乾燥密度 ${formatDensity(record.density)} kg/m³\n\nこの記録を削除しますか？`
+    );
+    if (!ok) return;
+
+    records = records.filter((item) => item.id !== id);
+    saveRecords();
+
+    if (editIdInput.value === id) resetForm();
+
+    renderRecords();
+    showToast("記録を削除しました。");
   }
 
-  function pointNumber(point) {
-    return Number(point.replace("No.", ""));
+  function resetForm() {
+    editIdInput.value = "";
+    dateInput.value = todayLocal();
+    pointSelect.value = "No.20";
+    document.querySelector('input[name="lane"][value="左"]').checked = true;
+    densityInput.value = "";
+    saveButton.textContent = "登録する";
+    cancelEditButton.classList.add("hidden");
   }
 
-  function round1(value) {
-    return Math.round(value * 10) / 10;
+  async function shareCsv() {
+    if (records.length === 0) {
+      alert("共有する測定データがありません。");
+      return;
+    }
+
+    const csv = buildCsv(records);
+    const fileName = `SDG記録_${todayLocal().replaceAll("-", "")}.csv`;
+    const file = new File(
+      ["\uFEFF" + csv],
+      fileName,
+      { type: "text/csv;charset=utf-8" }
+    );
+
+    try {
+      if (
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          title: "SDG測定記録",
+          text: "SDG測定記録のCSVです。",
+          files: [file]
+        });
+        return;
+      }
+
+      downloadFile(file, fileName);
+      alert(
+        "この端末では共有画面を直接開けなかったため、CSVをダウンロードしました。\nファイルからOutlookで共有してください。"
+      );
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        console.error(error);
+        downloadFile(file, fileName);
+        alert(
+          "共有画面を開けなかったため、CSVをダウンロードしました。\nファイルからOutlookで共有してください。"
+        );
+      }
+    }
+  }
+
+  function buildCsv(items) {
+    const header = ["測定日", "測点", "車線", "乾燥密度(kg/m³)"];
+    const rows = items
+      .slice()
+      .sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        const pointCompare = pointNumber(a.point) - pointNumber(b.point);
+        if (pointCompare !== 0) return pointCompare;
+        return a.lane.localeCompare(b.lane, "ja");
+      })
+      .map((record) => [
+        record.date,
+        record.point,
+        record.lane,
+        formatDensity(record.density)
+      ]);
+
+    return [header, ...rows]
+      .map((row) => row.map(csvEscape).join(","))
+      .join("\r\n");
   }
 
   function csvEscape(value) {
     const text = String(value ?? "");
-    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replaceAll('"', '""')}"`;
+    }
+    return text;
   }
 
-  function downloadBlob(content, filename, type) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
+  function downloadFile(file, fileName) {
+    const url = URL.createObjectURL(file);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = filename;
+    anchor.download = fileName;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function showMessage(text, type) {
-    el.message.textContent = text;
-    el.message.className = `message ${type}`;
+  function updateFilterButtons() {
+    showTodayButton.classList.toggle("active", currentFilter === "today");
+    showAllButton.classList.toggle("active", currentFilter === "all");
   }
 
-  function clearMessage() {
-    el.message.textContent = "";
-    el.message.className = "message";
+  function formatDensity(value) {
+    const number = Number(value);
+    return Number.isInteger(number) ? number.toFixed(0) : number.toFixed(1);
   }
 
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  function pointNumber(point) {
+    const match = String(point).match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  }
+
+  function todayLocal() {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+  }
+
+  function formatJapaneseDate(dateText) {
+    const [year, month, day] = dateText.split("-");
+    return `${year}/${Number(month)}/${Number(day)}`;
+  }
+
+  function createId() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  let toastTimer;
+  function showToast(message) {
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.classList.add("show");
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
   }
 
   function registerServiceWorker() {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./service-worker.js").catch(console.error);
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js").catch((error) => {
+          console.warn("Service Worker registration failed:", error);
+        });
+      });
     }
   }
 })();

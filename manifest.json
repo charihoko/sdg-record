@@ -1,9 +1,9 @@
 {
   "name": "SDG Record",
-  "short_name": "SDG Record",
+  "short_name": "SDG記録",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#eef3f7",
-  "theme_color": "#0f4c81",
-  "description": "SDG乾燥密度の現場記録アプリ"
+  "background_color": "#eef3f4",
+  "theme_color": "#0b5d66",
+  "lang": "ja"
 }

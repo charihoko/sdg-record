@@ -1,27 +1,28 @@
-SDG Record V1.0
+SDG Record V1.1
 
-�� �@�\
-- ������A���_�iNo.20�`No.110�j�A���E�A�������x��o�^
-- SDG��ʎʐ^����OCR�ǎ��
-- OCR�l�̒��ڏC��
-- �[�����ۑ��ilocalStorage�j
-- �ꗗ�\���A�C���A�폜
-- UTF-8 BOM�t��CSV�o��
-- JSON�o�b�N�A�b�v�ۑ��E�Ǎ�
-- �ʐ^���̂��͕̂ۑ����܂���
-- GitHub�ɂ͑���f�[�^�𑗐M���܂���
+【変更内容】
+・OCR機能を削除
+・写真撮影機能を削除
+・乾燥密度は直接入力のみ
+・バックアップ保存／読込を削除
+・CSVボタン名を「CSVを共有・メールする」に変更
+・iPhoneの共有画面からOutlookを選べる方式
+・全データ削除は2回確認
+  1回目：
+  「保存されている全ての測定データを削除します。削除して良いですか？」
+  2回目：
+  「本当に削除しますか？この操作は元に戻せません。」
 
-�� GitHub Pages�ւ̐ݒu
-1. ���̃t�H���_���̃t�@�C����GitHub���|�W�g���փA�b�v���[�h
-2. Settings �� Pages
-3. Deploy from a branch ��I��
-4. main / root ���w��
-5. �\�����ꂽURL��iPhone��Safari�ŊJ��
-6. ���L �� �z�[����ʂɒǉ�
+【GitHubへの更新】
+現在の sdg-record リポジトリで、次の5ファイルを差し替えてください。
+・index.html
+・style.css
+・app.js
+・manifest.json
+・service-worker.js
 
-�� ����
-- ����f�[�^�͗��p�[�����ɕۑ�����܂��B
-- Safari�̗����EWeb�T�C�g�f�[�^�폜�A�[���̏�E�����ŏ�����\��������܂��B
-- �����܂��͏T����CSV�ƃo�b�N�A�b�vJSON��OneDrive�֕ۑ����Ă��������B
-- OCR��Tesseract.js��CDN����ǂݍ��ނ��߁A����OCR���̓C���^�[�l�b�g�ڑ����K�v�ł��B
-- OCR���ʂ͕K��SDG��ʂƏƍ����Ă��������B
+README.txt はGitHubに置いても置かなくても構いません。
+
+【注意】
+GitHub上のファイルを差し替えても、iPhone内の既存測定データは原則として残ります。
+更新直後に古い画面が表示される場合は、Safariを閉じて再度開いてください。
