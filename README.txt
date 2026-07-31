@@ -1,28 +1,23 @@
-SDG Record V1.1
+SDG Record V1.2 GitHub差替え用
 
-【変更内容】
-・OCR機能を削除
-・写真撮影機能を削除
-・乾燥密度は直接入力のみ
-・バックアップ保存／読込を削除
-・CSVボタン名を「CSVを共有・メールする」に変更
-・iPhoneの共有画面からOutlookを選べる方式
+完全削除済み：
+・SDG画面を撮影・選択
+・画像から乾燥密度を読み取る
+・画像は保存されません
+・バックアップ保存
+・バックアップ読込
+
+変更済み：
+・CSVを共有・メールする
 ・全データ削除は2回確認
-  1回目：
-  「保存されている全ての測定データを削除します。削除して良いですか？」
-  2回目：
-  「本当に削除しますか？この操作は元に戻せません。」
 
-【GitHubへの更新】
-現在の sdg-record リポジトリで、次の5ファイルを差し替えてください。
-・index.html
-・style.css
-・app.js
-・manifest.json
-・service-worker.js
+GitHubの sdg-record リポジトリで以下を差し替えてください。
+index.html
+style.css
+app.js
+manifest.json
+service-worker.js
 
-README.txt はGitHubに置いても置かなくても構いません。
-
-【注意】
-GitHub上のファイルを差し替えても、iPhone内の既存測定データは原則として残ります。
-更新直後に古い画面が表示される場合は、Safariを閉じて再度開いてください。
+更新後も古い画面が出る場合：
+Safariでページを再読み込みしてください。
+それでも変わらない場合は、ホーム画面の旧アイコンを削除して、GitHub PagesをSafariで開き直してください。

@@ -3,22 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b5d66">
+  <meta name="theme-color" content="#165b92">
   <title>SDG Record</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>SDG Record</h1>
-      <p>乾燥密度 記録</p>
-    </div>
-  </header>
-
-  <main>
+  <main class="page">
     <section class="card">
-      <h2>測定値を入力</h2>
+      <h1>入力</h1>
 
       <form id="recordForm">
         <input type="hidden" id="editId">
@@ -28,24 +21,20 @@
           <input id="date" type="date" required>
         </label>
 
-        <label>
-          測点
-          <select id="point" required></select>
-        </label>
+        <div class="two-column">
+          <label>
+            測点
+            <select id="point" required></select>
+          </label>
 
-        <fieldset>
-          <legend>車線</legend>
-          <div class="lane-buttons">
-            <label class="radio-button">
-              <input type="radio" name="lane" value="左" checked>
-              <span>左</span>
-            </label>
-            <label class="radio-button">
-              <input type="radio" name="lane" value="右">
-              <span>右</span>
-            </label>
-          </div>
-        </fieldset>
+          <label>
+            車線
+            <select id="lane" required>
+              <option value="左">左</option>
+              <option value="右">右</option>
+            </select>
+          </label>
+        </div>
 
         <label>
           乾燥密度（kg/m³）
@@ -60,20 +49,20 @@
           >
         </label>
 
-        <div class="form-actions">
-          <button id="saveButton" type="submit" class="primary">登録する</button>
-          <button id="cancelEditButton" type="button" class="secondary hidden">編集をやめる</button>
-        </div>
+        <button id="saveButton" type="submit" class="primary wide">登録</button>
+        <button id="cancelEditButton" type="button" class="secondary wide hidden">編集をやめる</button>
       </form>
     </section>
 
     <section class="card">
-      <div class="section-heading">
-        <h2>測定記録</h2>
-        <div class="filter-buttons">
-          <button id="showTodayButton" type="button" class="small active">今日</button>
-          <button id="showAllButton" type="button" class="small">全件</button>
-        </div>
+      <div class="heading-row">
+        <h2>記録一覧</h2>
+        <strong id="recordCount">0件</strong>
+      </div>
+
+      <div class="filter-row">
+        <button id="showTodayButton" type="button" class="filter active">今日</button>
+        <button id="showAllButton" type="button" class="filter">全件</button>
       </div>
 
       <p id="emptyMessage" class="empty-message">記録はありません。</p>
@@ -81,24 +70,22 @@
     </section>
 
     <section class="card">
-      <h2>CSV</h2>
+      <h2>CSV共有・メール</h2>
+      <p class="note">共有画面が開いたらOutlookを選択して送信してください。</p>
+
       <button id="shareCsvButton" type="button" class="primary wide">
         CSVを共有・メールする
       </button>
-      <p class="note">共有画面が開いたらOutlookを選択してください。</p>
-    </section>
 
-    <section class="card danger-card">
-      <h2>データ管理</h2>
-      <button id="deleteAllButton" type="button" class="danger wide">
+      <button id="deleteAllButton" type="button" class="danger-outline wide">
         全データ削除
       </button>
-      <p class="note">全削除は2回確認してから実行します。</p>
     </section>
+
+    <p class="footer-note">測定データはこの端末内に保存され、GitHubには送信されません。</p>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
   <script src="app.js"></script>
 </body>
 </html>
