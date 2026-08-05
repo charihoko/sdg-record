@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "sdgRecords";
+  const POINT_KEY = "sdgLastPoint";
   let records = loadRecords();
   let currentFilter = "today";
 
@@ -32,6 +33,7 @@
       pointSelect.appendChild(option);
     }
     dateInput.value = todayLocal();
+    pointSelect.value = loadLastPoint();
     render();
     registerServiceWorker();
   }
@@ -84,11 +86,16 @@
     }
 
     saveRecords();
+    localStorage.setItem(POINT_KEY, pointSelect.value);
     resetForm();
     render();
   });
 
   cancelEditButton.addEventListener("click", resetForm);
+
+  pointSelect.addEventListener("change", () => {
+    localStorage.setItem(POINT_KEY, pointSelect.value);
+  });
 
   showTodayButton.addEventListener("click", () => {
     currentFilter = "today";
@@ -201,7 +208,7 @@
   function resetForm() {
     editId.value = "";
     dateInput.value = todayLocal();
-    pointSelect.value = "No.20";
+    pointSelect.value = loadLastPoint();
     laneSelect.value = "左";
     densityInput.value = "";
     saveButton.textContent = "登録";
@@ -280,6 +287,11 @@
   function formatDensity(value) {
     const number = Number(value);
     return Number.isInteger(number) ? String(number) : number.toFixed(1);
+  }
+
+  function loadLastPoint() {
+    const saved = localStorage.getItem(POINT_KEY);
+    return /^No\.(?:[2-9]\d|10\d|110)$/.test(saved || "") ? saved : "No.20";
   }
 
   function todayLocal() {
