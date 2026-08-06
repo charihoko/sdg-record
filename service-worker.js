@@ -1,4 +1,4 @@
-const CACHE_NAME = "sdg-record-v1-4";
+const CACHE_NAME = "sdg-record-v1-5";
 const FILES = ["./","./index.html","./style.css","./app.js","./manifest.json"];
 
 self.addEventListener("install", event => {

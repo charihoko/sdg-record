@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "sdgRecords";
   const POINT_KEY = "sdgLastPoint";
+  const MAX_DRY_DENSITY = 1803;
   let records = loadRecords();
   let currentFilter = "today";
 
@@ -21,6 +22,16 @@
   const recordCount = document.getElementById("recordCount");
   const shareCsvButton = document.getElementById("shareCsvButton");
   const deleteAllButton = document.getElementById("deleteAllButton");
+  const showGraphButton = document.getElementById("showGraphButton");
+  const closeGraphButton = document.getElementById("closeGraphButton");
+  const graphSection = document.getElementById("graphSection");
+  const graphScope = document.getElementById("graphScope");
+  const leftChart = document.getElementById("leftChart");
+  const rightChart = document.getElementById("rightChart");
+  const leftStats = document.getElementById("leftStats");
+  const rightStats = document.getElementById("rightStats");
+  const leftEmpty = document.getElementById("leftEmpty");
+  const rightEmpty = document.getElementById("rightEmpty");
   const toast = document.getElementById("toast");
 
   init();
@@ -111,6 +122,20 @@
 
   shareCsvButton.addEventListener("click", shareCsv);
 
+  showGraphButton.addEventListener("click", () => {
+    graphSection.classList.remove("hidden");
+    renderGraphs();
+    graphSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  closeGraphButton.addEventListener("click", () => {
+    graphSection.classList.add("hidden");
+  });
+
+  window.addEventListener("resize", () => {
+    if (!graphSection.classList.contains("hidden")) renderGraphs();
+  });
+
   deleteAllButton.addEventListener("click", () => {
     if (records.length === 0) {
       alert("削除する測定データはありません。");
@@ -152,11 +177,17 @@
       date.textContent = record.date.replaceAll("-", "/");
       left.append(title, date);
 
+      const values = document.createElement("div");
+      values.className = "record-values";
       const density = document.createElement("div");
       density.className = "record-density";
-      density.textContent = `${formatDensity(record.density)} kg/m³`;
+      density.innerHTML = `${formatDensity(record.density)} <span class="record-unit-label">kg/m³</span>`;
+      const compaction = document.createElement("div");
+      compaction.className = "record-compaction";
+      compaction.innerHTML = `${formatCompaction(record.density)} <span class="record-unit-label">締固め度</span>`;
+      values.append(density, compaction);
 
-      top.append(left, density);
+      top.append(left, values);
 
       const actions = document.createElement("div");
       actions.className = "record-actions";
@@ -245,7 +276,7 @@
   }
 
   function buildCsv(items) {
-    const rows = [["測定日", "測点", "車線", "乾燥密度(kg/m³)"]];
+    const rows = [["測定日", "測点", "車線", "乾燥密度(kg/m³)", "締固め度(%)"]];
     items
       .slice()
       .sort((a, b) => a.date.localeCompare(b.date) || pointNumber(a.point) - pointNumber(b.point) || a.lane.localeCompare(b.lane, "ja"))
@@ -253,7 +284,8 @@
         record.date,
         record.point,
         record.lane,
-        formatDensity(record.density)
+        formatDensity(record.density),
+        formatCompactionNumber(record.density)
       ]));
     return rows.map((row) => row.map(csvEscape).join(",")).join("\r\n");
   }
@@ -287,6 +319,121 @@
   function formatDensity(value) {
     const number = Number(value);
     return Number.isInteger(number) ? String(number) : number.toFixed(1);
+  }
+
+  function compactionValue(density) {
+    return Number(density) / MAX_DRY_DENSITY * 100;
+  }
+
+  function formatCompactionNumber(density) {
+    const value = compactionValue(density);
+    return Number.isFinite(value) ? value.toFixed(1) : "";
+  }
+
+  function formatCompaction(density) {
+    const value = formatCompactionNumber(density);
+    return value ? `${value}%` : "－";
+  }
+
+  function graphRecords() {
+    return records
+      .filter((record) => currentFilter === "all" || record.date === todayLocal())
+      .filter((record) => Number.isFinite(Number(record.density)))
+      .slice()
+      .sort((a, b) => pointNumber(a.point) - pointNumber(b.point) || String(a.date).localeCompare(String(b.date)) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  }
+
+  function renderGraphs() {
+    const items = graphRecords();
+    graphScope.textContent = currentFilter === "today" ? `今日（${todayLocal().replaceAll("-", "/")}）の記録` : "全記録";
+    drawLaneChart(leftChart, leftStats, leftEmpty, items.filter((record) => record.lane === "左"), "#165b92");
+    drawLaneChart(rightChart, rightStats, rightEmpty, items.filter((record) => record.lane === "右"), "#0b7358");
+  }
+
+  function drawLaneChart(canvas, statsElement, emptyElement, items, lineColor) {
+    const wrapper = canvas.parentElement;
+    const values = items.map((record) => compactionValue(record.density));
+    const hasData = values.length > 0;
+    wrapper.classList.toggle("hidden", !hasData);
+    emptyElement.classList.toggle("hidden", hasData);
+    statsElement.replaceChildren();
+    if (!hasData) return;
+
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    [
+      `平均 ${average.toFixed(1)}%`,
+      `最低 ${Math.min(...values).toFixed(1)}%`,
+      `最高 ${Math.max(...values).toFixed(1)}%`
+    ].forEach((text) => {
+      const chip = document.createElement("span");
+      chip.className = "stat-chip";
+      chip.textContent = text;
+      statsElement.appendChild(chip);
+    });
+
+    const cssWidth = Math.max(wrapper.clientWidth || 300, items.length * 58 + 70);
+    const cssHeight = 280;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const margin = { top: 20, right: 18, bottom: 55, left: 48 };
+    const plotWidth = cssWidth - margin.left - margin.right;
+    const plotHeight = cssHeight - margin.top - margin.bottom;
+    const minValue = Math.min(90, Math.floor(Math.min(...values, 93) - 1));
+    const maxValue = Math.max(103, Math.ceil(Math.max(...values, 100) + 1));
+    const x = (index) => margin.left + (items.length === 1 ? plotWidth / 2 : index * plotWidth / (items.length - 1));
+    const y = (value) => margin.top + (maxValue - value) * plotHeight / (maxValue - minValue);
+
+    ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.strokeStyle = "#dbe5eb";
+    ctx.fillStyle = "#526873";
+    for (let value = Math.ceil(minValue / 2) * 2; value <= maxValue; value += 2) {
+      ctx.beginPath();
+      ctx.moveTo(margin.left, y(value));
+      ctx.lineTo(cssWidth - margin.right, y(value));
+      ctx.stroke();
+      ctx.fillText(`${value}%`, margin.left - 7, y(value));
+    }
+
+    [[93, "#d07a00"], [100, "#b22b37"]].forEach(([value, color]) => {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(margin.left, y(value));
+      ctx.lineTo(cssWidth - margin.right, y(value));
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    values.forEach((value, index) => index ? ctx.lineTo(x(index), y(value)) : ctx.moveTo(x(index), y(value)));
+    ctx.stroke();
+
+    values.forEach((value, index) => {
+      ctx.fillStyle = lineColor;
+      ctx.beginPath();
+      ctx.arc(x(index), y(value), 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.save();
+      ctx.translate(x(index), cssHeight - margin.bottom + 12);
+      ctx.rotate(-Math.PI / 4);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#263e4c";
+      ctx.fillText(items[index].point, 0, 0);
+      ctx.restore();
+    });
   }
 
   function loadLastPoint() {

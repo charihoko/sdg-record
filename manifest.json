@@ -1,6 +1,6 @@
 {
-  "name": "SDG Record",
-  "short_name": "SDG記録",
+  "name": "SDG Record V1.5",
+  "short_name": "SDG V1.5",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#edf4f8",
