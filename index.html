@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#165b92">
-  <title>SDG Record V1.5</title>
+  <title>SDG Record V1.5.3</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=1.5.1">
+  <link rel="stylesheet" href="style.css?v=1.5.3">
 </head>
 <body>
   <main class="page">
@@ -105,6 +105,13 @@
         CSVを共有・メールする
       </button>
 
+      <div class="import-area">
+        <h3>CSVを取り込む</h3>
+        <p class="note">V1.4・V1.5のCSVに対応。既存記録は削除・上書きしません。</p>
+        <input id="csvFileInput" class="file-input" type="file" accept=".csv,text/csv">
+        <button id="selectCsvButton" type="button" class="secondary wide">CSVファイルを選ぶ</button>
+      </div>
+
       <button id="deleteAllButton" type="button" class="danger-outline wide">
         全データ削除
       </button>
@@ -114,6 +121,20 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app-v1.5.1.js"></script>
+  <dialog id="importDialog" class="import-dialog">
+    <h2>CSV取込確認</h2>
+    <p id="importFileName" class="import-file-name"></p>
+    <div class="import-summary">
+      <div><span>読込件数</span><strong id="importTotal">0件</strong></div>
+      <div><span>追加</span><strong id="importAdd">0件</strong></div>
+      <div><span>重複</span><strong id="importDuplicate">0件</strong></div>
+    </div>
+    <p id="importWarning" class="import-warning hidden"></p>
+    <div class="dialog-actions">
+      <button id="cancelImportButton" type="button" class="secondary">キャンセル</button>
+      <button id="confirmImportButton" type="button" class="primary">追加する</button>
+    </div>
+  </dialog>
+  <script src="app-v1.5.2.js?v=1.5.3"></script>
 </body>
 </html>
