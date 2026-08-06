@@ -51,7 +51,8 @@ button{
 .record-title{font-weight:800}
 .record-values{text-align:right;white-space:nowrap}
 .record-density{font-weight:900}
-.record-compaction{margin-top:4px;color:#0b7358;font-size:1.08rem;font-weight:900}
+.record-compaction{margin-top:6px;color:#0b7358;font-size:1.08rem;font-weight:900}
+.record-compaction-label{margin-right:6px;color:#3e5966;font-size:.78rem;font-weight:800}
 .record-unit-label{color:#6c7d88;font-size:.72rem;font-weight:700}
 .record-date{margin-top:5px;color:#6c7d88;font-size:.92rem}
 .record-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
